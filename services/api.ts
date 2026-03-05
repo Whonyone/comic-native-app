@@ -1,7 +1,7 @@
 import { Comic, ComicImage, Percomic, User } from '../types';
 
 // Android 에뮬레이터: 10.0.2.2 / iOS 시뮬레이터: localhost
-const BASE_URL = 'http://10.0.2.2:3000/api';
+const BASE_URL = 'http://192.168.0.111:3000/api';
 
 let authToken: string | null = null;
 

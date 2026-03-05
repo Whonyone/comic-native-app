@@ -51,4 +51,14 @@ router.put('/:id', (req, res) => {
   res.json(db.prepare('SELECT * FROM comics WHERE id = ?').get(req.params.id));
 });
 
+// DELETE /api/comics/:id
+router.delete('/:id', (req, res) => {
+  const comic = db.prepare('SELECT * FROM comics WHERE id = ?').get(req.params.id);
+  if (!comic) return res.status(404).json({ message: '만화를 찾을 수 없습니다.' });
+  db.prepare('DELETE FROM percomic_images WHERE percomicId IN (SELECT id FROM percomics WHERE comicId = ?)').run(req.params.id);
+  db.prepare('DELETE FROM percomics WHERE comicId = ?').run(req.params.id);
+  db.prepare('DELETE FROM comics WHERE id = ?').run(req.params.id);
+  res.json({ message: '삭제되었습니다.' });
+});
+
 module.exports = router;

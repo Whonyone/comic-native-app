@@ -1,4 +1,4 @@
-export type UserRole = 'user' | 'admin';
+export type UserRole = 'user' | 'author';
 
 // 로그인 요청 전용 (password는 여기서만 사용)
 export interface LoginRequest {

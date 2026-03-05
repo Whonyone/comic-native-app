@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState } from 'react';
-import { authApi } from '@/lib/api';
+import { authApi, setAuthToken } from '@/lib/api';
 import { User } from '@/types';
 
 interface AuthState {
@@ -20,6 +20,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const login = async (email: string, password: string) => {
     const { token, user } = await authApi.login({ email, password });
+    setAuthToken(token);
     setState({ token, user });
   };
 
@@ -33,6 +34,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const logout = () => {
+    setAuthToken(null);
     setState({ user: null, token: null });
   };
 
