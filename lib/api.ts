@@ -1,6 +1,6 @@
 import { Platform } from 'react-native';
 import Constants from 'expo-constants';
-import { LoginRequest, User, Comic } from '@/types';
+import { LoginRequest, User, Comic, Percomic } from '@/types';
 
 function getBaseUrl() {
   const hostUri = Constants.expoConfig?.hostUri;
@@ -70,4 +70,18 @@ export const comicsApi = {
 
   delete: (id: number) =>
     request<{ message: string }>(`/api/comics/${id}`, { method: 'DELETE' }),
+};
+
+export const episodesApi = {
+  getAll: (comicId: number) =>
+    request<Percomic[]>(`/api/comics/${comicId}/episodes`),
+
+  create: (comicId: number, body: { title: string; thumbnail: string; episodeNumber: number; images: { url: string; order: number }[] }) =>
+    request<Percomic>(`/api/comics/${comicId}/episodes`, { method: 'POST', body: JSON.stringify(body) }),
+
+  update: (comicId: number, id: number, body: Partial<{ title: string; thumbnail: string; images: { url: string; order: number }[] }>) =>
+    request<Percomic>(`/api/comics/${comicId}/episodes/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
+
+  delete: (comicId: number, id: number) =>
+    request<{ message: string }>(`/api/comics/${comicId}/episodes/${id}`, { method: 'DELETE' }),
 };

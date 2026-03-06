@@ -60,4 +60,48 @@ router.post('/', (req, res) => {
   res.status(201).json(attachImages(episode));
 });
 
+// PUT /api/comics/:comicId/episodes/:id
+router.put('/:id', (req, res) => {
+  const episode = db.prepare(
+    'SELECT * FROM percomics WHERE id = ? AND comicId = ?'
+  ).get(req.params.id, req.params.comicId);
+  if (!episode) return res.status(404).json({ message: '에피소드를 찾을 수 없습니다.' });
+
+  const { title, thumbnail, images } = req.body;
+
+  const update = db.transaction(() => {
+    if (title || thumbnail) {
+      const fields = [];
+      const vals = [];
+      if (title) { fields.push('title = ?'); vals.push(title); }
+      if (thumbnail) { fields.push('thumbnail = ?'); vals.push(thumbnail); }
+      vals.push(req.params.id);
+      db.prepare(`UPDATE percomics SET ${fields.join(', ')} WHERE id = ?`).run(...vals);
+    }
+    if (images && images.length > 0) {
+      db.prepare('DELETE FROM percomic_images WHERE percomicId = ?').run(req.params.id);
+      const insertImage = db.prepare(
+        'INSERT INTO percomic_images (percomicId, url, image_order) VALUES (?, ?, ?)'
+      );
+      images.forEach(({ url, order }) => insertImage.run(req.params.id, url, order));
+    }
+  });
+
+  update();
+  const updated = db.prepare('SELECT * FROM percomics WHERE id = ?').get(req.params.id);
+  res.json(attachImages(updated));
+});
+
+// DELETE /api/comics/:comicId/episodes/:id
+router.delete('/:id', (req, res) => {
+  const episode = db.prepare(
+    'SELECT * FROM percomics WHERE id = ? AND comicId = ?'
+  ).get(req.params.id, req.params.comicId);
+  if (!episode) return res.status(404).json({ message: '에피소드를 찾을 수 없습니다.' });
+
+  db.prepare('DELETE FROM percomic_images WHERE percomicId = ?').run(req.params.id);
+  db.prepare('DELETE FROM percomics WHERE id = ?').run(req.params.id);
+  res.json({ message: '삭제되었습니다.' });
+});
+
 module.exports = router;
