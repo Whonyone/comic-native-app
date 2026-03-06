@@ -1,6 +1,7 @@
 import { useAuth } from '@/context/auth';
-import { comicsApi } from '@/lib/api';
+import { comicsApi, toImageUrl } from '@/lib/api';
 import { Comic } from '@/types';
+import * as ImagePicker from 'expo-image-picker';
 import { Image } from 'expo-image';
 import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
@@ -20,13 +21,13 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-interface ComicFormModal {
+interface ComicFormState {
   visible: boolean;
   mode: 'create' | 'edit';
   comic: Partial<Comic>;
 }
 
-const EMPTY_FORM: ComicFormModal = {
+const EMPTY_FORM: ComicFormState = {
   visible: false,
   mode: 'create',
   comic: { title: '', description: '', thumbnail: '' },
@@ -38,28 +39,64 @@ function ComicFormSheet({
   onSubmit,
   loading,
 }: {
-  modal: ComicFormModal;
+  modal: ComicFormState;
   onClose: () => void;
-  onSubmit: (data: { title: string; description: string; thumbnail: string }) => void;
+  onSubmit: (formData: FormData) => void;
   loading: boolean;
 }) {
-  const [title, setTitle] = useState(modal.comic.title ?? '');
-  const [description, setDescription] = useState(modal.comic.description ?? '');
-  const [thumbnail, setThumbnail] = useState(modal.comic.thumbnail ?? '');
+  const [title, setTitle] = useState('');
+  const [description, setDescription] = useState('');
+  const [thumbnailUri, setThumbnailUri] = useState<string | null>(null);
 
   useEffect(() => {
-    setTitle(modal.comic.title ?? '');
-    setDescription(modal.comic.description ?? '');
-    setThumbnail(modal.comic.thumbnail ?? '');
-  }, [modal.comic]);
+    if (modal.visible) {
+      setTitle(modal.comic.title ?? '');
+      setDescription(modal.comic.description ?? '');
+      setThumbnailUri(null);
+    }
+  }, [modal.visible, modal.comic]);
 
-  const handleSubmit = () => {
-    if (!title.trim() || !description.trim() || !thumbnail.trim()) {
-      Alert.alert('입력 오류', '모든 항목을 입력해주세요.');
+  const pickThumbnail = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('권한 필요', '갤러리 접근 권한이 필요합니다.');
       return;
     }
-    onSubmit({ title: title.trim(), description: description.trim(), thumbnail: thumbnail.trim() });
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: 'images',
+      quality: 0.85,
+    });
+    if (!result.canceled) {
+      setThumbnailUri(result.assets[0].uri);
+    }
   };
+
+  const handleSubmit = () => {
+    if (!title.trim() || !description.trim()) {
+      Alert.alert('입력 오류', '제목과 설명을 입력해주세요.');
+      return;
+    }
+    if (modal.mode === 'create' && !thumbnailUri) {
+      Alert.alert('입력 오류', '썸네일 이미지를 선택해주세요.');
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append('title', title.trim());
+    formData.append('description', description.trim());
+    if (thumbnailUri) {
+      const filename = thumbnailUri.split('/').pop() ?? 'thumbnail.jpg';
+      const ext = filename.split('.').pop() ?? 'jpg';
+      formData.append('thumbnail', {
+        uri: thumbnailUri,
+        name: `thumbnail.${ext}`,
+        type: `image/${ext === 'jpg' ? 'jpeg' : ext}`,
+      } as any);
+    }
+    onSubmit(formData);
+  };
+
+  const currentThumbnail = thumbnailUri ?? (modal.comic.thumbnail ? toImageUrl(modal.comic.thumbnail) : null);
 
   return (
     <Modal visible={modal.visible} animationType="slide" transparent onRequestClose={onClose}>
@@ -90,16 +127,23 @@ function ComicFormSheet({
               multiline
               numberOfLines={4}
             />
-            <Text style={styles.label}>썸네일 URL</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="https://..."
-              placeholderTextColor="#9BA1A6"
-              value={thumbnail}
-              onChangeText={setThumbnail}
-              autoCapitalize="none"
-              keyboardType="url"
-            />
+            <Text style={styles.label}>썸네일</Text>
+            <Pressable style={styles.imagePicker} onPress={pickThumbnail}>
+              {currentThumbnail ? (
+                <Image
+                  source={{ uri: currentThumbnail }}
+                  style={styles.imagePreview}
+                  contentFit="cover"
+                />
+              ) : (
+                <Text style={styles.imagePickerText}>+ 이미지 선택</Text>
+              )}
+            </Pressable>
+            {currentThumbnail && (
+              <Pressable onPress={pickThumbnail}>
+                <Text style={styles.changeImageText}>이미지 변경</Text>
+              </Pressable>
+            )}
           </ScrollView>
           <View style={styles.sheetButtons}>
             <Pressable style={styles.cancelButton} onPress={onClose} disabled={loading}>
@@ -129,7 +173,7 @@ export default function AuthorRoomScreen() {
   const router = useRouter();
   const [myComics, setMyComics] = useState<Comic[]>([]);
   const [loading, setLoading] = useState(false);
-  const [formModal, setFormModal] = useState<ComicFormModal>(EMPTY_FORM);
+  const [formModal, setFormModal] = useState<ComicFormState>(EMPTY_FORM);
   const [submitLoading, setSubmitLoading] = useState(false);
 
   const loadMyComics = useCallback(async () => {
@@ -150,18 +194,41 @@ export default function AuthorRoomScreen() {
   }, [loadMyComics]);
 
   const openCreate = () =>
-    setFormModal({ visible: true, mode: 'create', comic: { title: '', description: '', thumbnail: '' } });
+    setFormModal({ visible: true, mode: 'create', comic: { title: '', description: '' } });
 
   const closeModal = () => setFormModal(EMPTY_FORM);
 
-  const handleSubmit = async (data: { title: string; description: string; thumbnail: string }) => {
+  const handleDelete = (comic: Comic) => {
+    Alert.alert(
+      '작품 삭제',
+      `"${comic.title}"을(를) 정말로 삭제하시겠습니까?\n관련 회차와 이미지가 모두 삭제됩니다.`,
+      [
+        { text: '취소', style: 'cancel' },
+        {
+          text: '삭제',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await comicsApi.delete(comic.id);
+              await loadMyComics();
+            } catch (e: any) {
+              Alert.alert('오류', e.message);
+            }
+          },
+        },
+      ]
+    );
+  };
+
+  const handleSubmit = async (formData: FormData) => {
     if (!user) return;
     setSubmitLoading(true);
     try {
       if (formModal.mode === 'create') {
-        await comicsApi.create({ authorId: user.id, ...data });
+        formData.append('authorId', String(user.id));
+        await comicsApi.create(formData);
       } else if (formModal.comic.id != null) {
-        await comicsApi.update(formModal.comic.id, data);
+        await comicsApi.update(formModal.comic.id, formData);
       }
       closeModal();
       await loadMyComics();
@@ -201,18 +268,21 @@ export default function AuthorRoomScreen() {
           columnWrapperStyle={{ gap: CARD_GAP }}
           ItemSeparatorComponent={() => <View style={{ height: CARD_GAP }} />}
           renderItem={({ item }) => (
-            <Pressable
-              style={styles.card}
-              onPress={() => router.push(`/author-room/${item.id}` as any)}>
-              <Image
-                source={{ uri: item.thumbnail }}
-                style={styles.thumbnail}
-                contentFit="cover"
-              />
-              <Text style={styles.cardTitle} numberOfLines={2}>
-                {item.title}
-              </Text>
-            </Pressable>
+            <View style={styles.card}>
+              <Pressable onPress={() => router.push(`/author-room/${item.id}` as any)}>
+                <Image
+                  source={{ uri: toImageUrl(item.thumbnail) }}
+                  style={styles.thumbnail}
+                  contentFit="cover"
+                />
+                <Text style={styles.cardTitle} numberOfLines={2}>
+                  {item.title}
+                </Text>
+              </Pressable>
+              <Pressable style={styles.cardDeleteButton} onPress={() => handleDelete(item)}>
+                <Text style={styles.cardDeleteText}>삭제</Text>
+              </Pressable>
+            </View>
           )}
         />
       )}
@@ -253,7 +323,7 @@ const styles = StyleSheet.create({
   },
   thumbnail: {
     width: '100%',
-    aspectRatio: 3 / 4,
+    aspectRatio: 1,
     borderRadius: 8,
     backgroundColor: '#E0E0E0',
   },
@@ -263,6 +333,18 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#11181C',
     textAlign: 'center',
+  },
+  cardDeleteButton: {
+    marginTop: 6,
+    paddingVertical: 5,
+    borderRadius: 6,
+    backgroundColor: '#FFF5F5',
+    alignItems: 'center',
+  },
+  cardDeleteText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#E53E3E',
   },
   empty: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 16 },
   emptyText: { color: '#687076', fontSize: 15 },
@@ -302,6 +384,25 @@ const styles = StyleSheet.create({
     backgroundColor: '#F9F9F9',
   },
   textArea: { minHeight: 90, textAlignVertical: 'top' },
+  imagePicker: {
+    borderWidth: 1,
+    borderColor: '#E0E0E0',
+    borderRadius: 10,
+    height: 160,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F9F9F9',
+    overflow: 'hidden',
+  },
+  imagePreview: { width: '100%', height: '100%' },
+  imagePickerText: { fontSize: 15, color: '#9BA1A6' },
+  changeImageText: {
+    fontSize: 13,
+    color: '#0a7ea4',
+    fontWeight: '600',
+    marginTop: 8,
+    textAlign: 'center',
+  },
   sheetButtons: { flexDirection: 'row', gap: 10, marginTop: 24 },
   cancelButton: {
     flex: 1,

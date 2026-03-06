@@ -11,12 +11,20 @@ function getBaseUrl() {
   return Platform.OS === 'android' ? 'http://192.168.0.111:3000' : 'http://localhost:3000';
 }
 
-const BASE_URL = getBaseUrl();
+export const BASE_URL = getBaseUrl();
 
 let _token: string | null = null;
 
 export function setAuthToken(token: string | null) {
   _token = token;
+}
+
+// DB에 저장된 상대 경로 → 표시용 전체 URL 변환
+// 기존 http:// URL은 그대로 반환 (하위 호환)
+export function toImageUrl(pathOrUrl: string): string {
+  if (!pathOrUrl) return '';
+  if (pathOrUrl.startsWith('http')) return pathOrUrl;
+  return `${BASE_URL}/uploads/${pathOrUrl}`;
 }
 
 interface SignupRequest {
@@ -37,9 +45,12 @@ interface SignupResponse {
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
     ...(options.headers as Record<string, string>),
   };
+  // FormData일 때는 Content-Type을 설정하지 않음 (브라우저/RN이 boundary 자동 설정)
+  if (!(options.body instanceof FormData)) {
+    headers['Content-Type'] = 'application/json';
+  }
   if (_token) headers['Authorization'] = `Bearer ${_token}`;
 
   const res = await fetch(`${BASE_URL}${path}`, { ...options, headers });
@@ -62,11 +73,13 @@ export const comicsApi = {
 
   getById: (id: number) => request<Comic>(`/api/comics/${id}`),
 
-  create: (body: { authorId: number; title: string; description: string; thumbnail: string }) =>
-    request<Comic>('/api/comics', { method: 'POST', body: JSON.stringify(body) }),
+  // FormData: authorId, title, description, thumbnail(file)
+  create: (formData: FormData) =>
+    request<Comic>('/api/comics', { method: 'POST', body: formData }),
 
-  update: (id: number, body: Partial<Pick<Comic, 'title' | 'description' | 'thumbnail'>>) =>
-    request<Comic>(`/api/comics/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
+  // FormData: title?, description?, thumbnail(file)?
+  update: (id: number, formData: FormData) =>
+    request<Comic>(`/api/comics/${id}`, { method: 'PUT', body: formData }),
 
   delete: (id: number) =>
     request<{ message: string }>(`/api/comics/${id}`, { method: 'DELETE' }),
@@ -76,11 +89,13 @@ export const episodesApi = {
   getAll: (comicId: number) =>
     request<Percomic[]>(`/api/comics/${comicId}/episodes`),
 
-  create: (comicId: number, body: { title: string; thumbnail: string; episodeNumber: number; images: { url: string; order: number }[] }) =>
-    request<Percomic>(`/api/comics/${comicId}/episodes`, { method: 'POST', body: JSON.stringify(body) }),
+  // FormData: title, episodeNumber, thumbnail(file), images(files[])
+  create: (comicId: number, formData: FormData) =>
+    request<Percomic>(`/api/comics/${comicId}/episodes`, { method: 'POST', body: formData }),
 
-  update: (comicId: number, id: number, body: Partial<{ title: string; thumbnail: string; images: { url: string; order: number }[] }>) =>
-    request<Percomic>(`/api/comics/${comicId}/episodes/${id}`, { method: 'PUT', body: JSON.stringify(body) }),
+  // FormData: title?, thumbnail(file)?, images(files[])?
+  update: (comicId: number, id: number, formData: FormData) =>
+    request<Percomic>(`/api/comics/${comicId}/episodes/${id}`, { method: 'PUT', body: formData }),
 
   delete: (comicId: number, id: number) =>
     request<{ message: string }>(`/api/comics/${comicId}/episodes/${id}`, { method: 'DELETE' }),
