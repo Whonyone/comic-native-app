@@ -10,7 +10,8 @@ import {
 } from 'react-native';
 import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { comicsApi } from '@/lib/api';
+import { router } from 'expo-router';
+import { comicsApi, toImageUrl } from '@/lib/api';
 import { Comic } from '@/types';
 
 type Filter = '전체' | '신작';
@@ -25,9 +26,12 @@ function isNew(createdAt: string) {
 
 function ComicCard({ item }: { item: Comic }) {
   return (
-    <View style={styles.card}>
+    <Pressable
+      style={styles.card}
+      onPress={() => router.push(`/comic/${item.id}` as any)}
+      android_ripple={{ color: '#e0e0e0' }}>
       <Image
-        source={{ uri: item.thumbnail }}
+        source={{ uri: toImageUrl(item.thumbnail) }}
         style={styles.thumbnail}
         contentFit="cover"
         transition={200}
@@ -42,7 +46,7 @@ function ComicCard({ item }: { item: Comic }) {
           {item.title}
         </Text>
       </View>
-    </View>
+    </Pressable>
   );
 }
 
