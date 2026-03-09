@@ -45,6 +45,7 @@ app-example
 # server
 server/node_modules/
 server/comic.db
+server/__tests__/
 
 # env files
 .env
