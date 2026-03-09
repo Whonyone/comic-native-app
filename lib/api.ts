@@ -89,6 +89,9 @@ export const episodesApi = {
   getAll: (comicId: number) =>
     request<Percomic[]>(`/api/comics/${comicId}/episodes`),
 
+  getById: (comicId: number, id: number) =>
+    request<Percomic>(`/api/comics/${comicId}/episodes/${id}`),
+
   // FormData: title, episodeNumber, thumbnail(file), images(files[])
   create: (comicId: number, formData: FormData) =>
     request<Percomic>(`/api/comics/${comicId}/episodes`, { method: 'POST', body: formData }),

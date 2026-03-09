@@ -9,7 +9,7 @@ import {
 } from 'react-native';
 import { Image } from 'expo-image';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useLocalSearchParams, useNavigation } from 'expo-router';
+import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
 import { comicsApi, episodesApi, toImageUrl } from '@/lib/api';
 import { Comic, Percomic } from '@/types';
 
@@ -21,6 +21,7 @@ function formatDate(dateStr: string) {
 export default function ComicDetailScreen() {
   const { comicId } = useLocalSearchParams<{ comicId: string }>();
   const navigation = useNavigation();
+  const router = useRouter();
 
   const [comic, setComic] = useState<Comic | null>(null);
   const [episodes, setEpisodes] = useState<Percomic[]>([]);
@@ -98,7 +99,16 @@ export default function ComicDetailScreen() {
         ListHeaderComponent={ListHeader}
         contentContainerStyle={styles.listContent}
         renderItem={({ item }) => (
-          <Pressable style={styles.episodeCard} android_ripple={{ color: '#e0e0e0' }}>
+          <Pressable
+            style={styles.episodeCard}
+            android_ripple={{ color: '#e0e0e0' }}
+            onPress={() =>
+              router.push({
+                pathname: '/comic/viewer',
+                params: { comicId, episodeId: String(item.id) },
+              } as any)
+            }
+          >
             <Image
               source={{ uri: toImageUrl(item.thumbnail) }}
               style={styles.episodeThumbnail}
